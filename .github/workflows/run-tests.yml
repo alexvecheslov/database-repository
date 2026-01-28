@@ -7,29 +7,32 @@ jobs: # аналог этапов
   run-tests:
     name: Set up services (review apps) and run tests
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pages: write
+      id-token: write
     steps: # шаги конкретной job
       - name: Checkout repository # копируем файлы репозитория внутрь CI агента
         uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          persist-credentials: true
 
       - name: Set up JDK
         uses: actions/setup-java@v4
         with:
           distribution: 'corretto'
           java-version: '21'
+          cache: 'maven'
 
-      - name: Cache Maven repository
-        uses: actions/cache@v4
-        with:
-          path: ~/.m2/repository
-          key: ${{ runner.os }}-maven-${{ hashFiles('**/pom.xml') }}
-          restore-keys: |
-            ${{ runner.os }}-maven-
-
-      - name: Set up services
-        run: cd infra/docker_compose && bash restart_docker.sh && cd ../..
+      - name: Set up Docker Compose
+        run: |
+          cd infra/docker_compose
+          bash restart_docker.sh
+          cd ../..
 
       - name: Run tests
-        run: ./mvnw clean test -q
+        run: mvn clean test -q
         env:
           APIBASEURL: http://localhost:4111
           UIBASEURL: http://frontend
@@ -37,26 +40,76 @@ jobs: # аналог этапов
 
       - name: Run Swagger coverage
         if: always()
-        run: .swagger-coverage-commandline/bin/swagger-coverage-commandline -s http://localhost:4111/v3/api-docs -i target/swagger-coverage-output
+        run: |
+          if [ -d "target/swagger-coverage-output" ] && [ "$(ls -A target/swagger-coverage-output)" ]; then
+            # Скачиваем JAR из Maven Central
+            SWAGGER_COVERAGE_VERSION=1.4.1
+            SWAGGER_COVERAGE_JAR="swagger-coverage-commandline-${SWAGGER_COVERAGE_VERSION}.jar"
+            if [ ! -f "$SWAGGER_COVERAGE_JAR" ]; then
+              wget "https://repo1.maven.org/maven2/com/github/viclovsky/swagger-coverage-commandline/${SWAGGER_COVERAGE_VERSION}/${SWAGGER_COVERAGE_JAR}"
+            fi
+            # Запускаем Swagger Coverage
+            java -jar "$SWAGGER_COVERAGE_JAR" \
+              -s http://localhost:4111/v3/api-docs \
+              -i target/swagger-coverage-output
+          else
+            echo "No swagger coverage data found, skipping report generation"
+          fi
+
+      - name: Install Allure CLI
+        if: always()
+        run: |
+          wget https://github.com/allure-framework/allure2/releases/download/2.24.0/allure-2.24.0.tgz
+          tar -zxvf allure-2.24.0.tgz
+          sudo mv allure-2.24.0 /opt/allure
+          sudo ln -s /opt/allure/bin/allure /usr/local/bin/allure
+          rm allure-2.24.0.tgz
+
+      - name: Create allure-history directory
+        if: always()
+        run: mkdir -p allure-history
 
       - name: Load test report history
-        uses: actions/checkout@v2
         if: always()
-        with:
-          ref: gh-pages
-          path: gh-pages
+        continue-on-error: true
+        run: |
+          # Пытаемся загрузить историю из gh-pages, если ветка существует
+          if git ls-remote --heads origin gh-pages 2>/dev/null | grep -q gh-pages; then
+            echo "gh-pages branch exists, fetching history"
+            git fetch origin gh-pages 2>/dev/null || true
+            git checkout gh-pages 2>/dev/null || mkdir -p gh-pages
+          else
+            echo "gh-pages branch does not exist yet, will be created on first publish"
+            mkdir -p gh-pages
+          fi
 
       - name: Build test report
-        uses: simple-elf/allure-report-action@v1.7
         if: always()
-        with:
-          gh_pages: gh-pages
-          allure_results: target/allure-results
-          allure_history: allure-history
+        run: |
+          if [ -d "target/allure-results" ] && [ "$(ls -A target/allure-results)" ]; then
+            # Копируем историю из gh-pages если она существует
+            if [ -d "gh-pages" ] && [ "$(ls -A gh-pages)" ]; then
+              cp -r gh-pages/* allure-history/ || true
+            fi
+            
+            # Генерируем новый отчет
+            allure generate target/allure-results -o allure-history/${{ github.run_number }} --clean
+            
+            # Создаем index для истории
+            if [ ! -f "allure-history/index.html" ]; then
+              cp allure-history/${{ github.run_number }}/index.html allure-history/index.html || true
+            fi
+          else
+            echo "No allure results found, skipping report generation"
+          fi
 
       - name: Build Swagger coverage report
         if: always()
-        run: sudo cp swagger-coverage-report.html allure-history/${{ github.run_number }}
+        run: |
+          if [ -f "swagger-coverage-report.html" ]; then
+            mkdir -p allure-history/${{ github.run_number }}
+            cp swagger-coverage-report.html allure-history/${{ github.run_number }}/ || true
+          fi
 
       - name: Publish test report
         uses: peaceiris/actions-gh-pages@v3
@@ -65,7 +118,12 @@ jobs: # аналог этапов
           github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_branch: gh-pages
           publish_dir: allure-history
+          force_orphan: true
 
       - name: Clean up services
         if: always()
-        run: cd infra/docker_compose && docker compose down
+        run: |
+          if [ -d "infra/docker_compose" ]; then
+            cd infra/docker_compose
+            docker compose down || true
+          fi

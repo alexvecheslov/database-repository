@@ -8,9 +8,9 @@ import api.models.LoginUserResponse;
 import api.models.CreateAccountResponse;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
-import models.ChangeNameResponse;
-import models.MakeDepositResponse;
-import models.MakeTransactionResponse;
+import api.models.ChangeNameResponse;
+import api.models.MakeDepositResponse;
+import api.models.MakeTransactionResponse;
 
 @Getter
 @AllArgsConstructor
