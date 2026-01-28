@@ -52,7 +52,20 @@ public class CrudRequester extends HttpRequest implements CrudEndpointInterface,
     @Override
     @Step("PUT запрос на {endpoint} с телом {model}")
     public Object update(long id, BaseModel model) {
-        return null;
+        return StepLogger.log("PUT request to " + endpoint.getUrl() + " with id " + id, () -> {
+            String url = API_VERSION + endpoint.getUrl();
+            // Заменяем {id} только если он присутствует в URL
+            if (url.contains("{id}")) {
+                url = url.replace("{id}", String.valueOf(id));
+            }
+            return given()
+                    .spec(requestSpecification)
+                    .body(model)
+                    .put(url)
+                    .then()
+                    .assertThat()
+                    .spec(responseSpecification);
+        });
     }
 
     @Override

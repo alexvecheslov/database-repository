@@ -30,8 +30,9 @@ public class ValidatedCrudRequester<T extends BaseModel> extends HttpRequest imp
     }
 
     @Override
-    public Object update(long id, BaseModel model) {
-        return null;
+    public T update(long id, BaseModel model) {
+        io.restassured.response.ValidatableResponse response = (io.restassured.response.ValidatableResponse) crudRequester.update(id, model);
+        return (T) response.extract().as(endpoint.getResponseModel());
     }
 
     @Override

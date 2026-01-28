@@ -1,4 +1,4 @@
-package models;
+package api.models;
 
 import api.models.BaseModel;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
@@ -20,5 +20,5 @@ public class ChangeNameResponse extends BaseModel {
     private String password;
     private String name;
     private String role;
-    private List<models.MakeDepositResponse> accounts;
+    private List<api.models.MakeDepositResponse> accounts;
 }

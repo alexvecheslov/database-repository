@@ -3,14 +3,14 @@ package iteration1.api;
 import api.models.CreateAccountResponse;
 import api.models.CreateUserRequest;
 import api.requests.steps.AdminSteps;
+import api.requests.steps.DataBaseSteps;
+import api.dao.AccountDao;
 import api.specs.RequestSpecs;
 import api.specs.ResponseSpecs;
-import api.helpers.AccountHelper;
-import models.MakeDepositRequest;
-import models.MakeDepositResponse;
-import models.MakeTransactionRequest;
-import models.MakeTransactionResponse;
-import api.models.comparison.ModelAssertions;
+import api.models.MakeDepositRequest;
+import api.models.MakeDepositResponse;
+import api.models.MakeTransactionRequest;
+import api.models.MakeTransactionResponse;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
@@ -20,6 +20,8 @@ import api.requests.skelethon.requesters.CrudRequester;
 import api.requests.skelethon.requesters.ValidatedCrudRequester;
 
 import java.util.stream.Stream;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class MakeTransactionTest extends BaseTest {
 
@@ -55,8 +57,12 @@ public class MakeTransactionTest extends BaseTest {
                 ResponseSpecs.requestReturnsOK())
                 .post(depositRequest);
 
-        MakeDepositResponse senderAccountBefore = AccountHelper.getAccountById(firstAccountId, userRequest.getUsername(), userRequest.getPassword());
-        MakeDepositResponse receiverAccountBefore = AccountHelper.getAccountById(secondAccountId, userRequest.getUsername(), userRequest.getPassword());
+        // Получаем балансы до транзакции из БД
+        AccountDao senderAccountDaoBefore = DataBaseSteps.getAccountById((long) firstAccountId);
+        AccountDao receiverAccountDaoBefore = DataBaseSteps.getAccountById((long) secondAccountId);
+        Double senderBalanceBefore = senderAccountDaoBefore.getBalance();
+        Double receiverBalanceBefore = receiverAccountDaoBefore.getBalance();
+
 
         MakeTransactionRequest transactionRequest = MakeTransactionRequest.builder()
                 .senderAccountId(firstAccountId)
@@ -70,21 +76,13 @@ public class MakeTransactionTest extends BaseTest {
                 ResponseSpecs.requestReturnsOK())
                 .post(transactionRequest);
 
-        MakeDepositResponse senderAccountAfter = AccountHelper.getAccountById(firstAccountId, userRequest.getUsername(), userRequest.getPassword());
-        MakeDepositResponse receiverAccountAfter = AccountHelper.getAccountById(secondAccountId, userRequest.getUsername(), userRequest.getPassword());
-
-        MakeDepositResponse expectedSenderAccount = MakeDepositResponse.builder()
-                .id(firstAccountId)
-                .balance(senderAccountBefore.getBalance() - amount)
-                .build();
-
-        MakeDepositResponse expectedReceiverAccount = MakeDepositResponse.builder()
-                .id(secondAccountId)
-                .balance(receiverAccountBefore.getBalance() + amount)
-                .build();
-
-        ModelAssertions.assertThatModels(expectedSenderAccount, senderAccountAfter).match();
-        ModelAssertions.assertThatModels(expectedReceiverAccount, receiverAccountAfter).match();
+        // Проверяем, что балансы изменились в базе данных
+        AccountDao senderAccountDaoAfter = DataBaseSteps.getAccountById((long) firstAccountId);
+        AccountDao receiverAccountDaoAfter = DataBaseSteps.getAccountById((long) secondAccountId);
+        assertEquals(senderBalanceBefore - amount, senderAccountDaoAfter.getBalance(),
+                "Sender account balance should be decreased by transaction amount in database");
+        assertEquals(receiverBalanceBefore + amount, receiverAccountDaoAfter.getBalance(),
+                "Receiver account balance should be increased by transaction amount in database");
     }
 
     @ParameterizedTest
@@ -123,8 +121,11 @@ public class MakeTransactionTest extends BaseTest {
             remainingNeeded -= currentDeposit;
         }
 
-        MakeDepositResponse senderAccountBefore = AccountHelper.getAccountById(firstAccountId, userRequest.getUsername(), userRequest.getPassword());
-        MakeDepositResponse receiverAccountBefore = AccountHelper.getAccountById(secondAccountId, userRequest.getUsername(), userRequest.getPassword());
+        // Получаем балансы до транзакции из БД
+        AccountDao senderAccountDaoBefore = DataBaseSteps.getAccountById((long) firstAccountId);
+        AccountDao receiverAccountDaoBefore = DataBaseSteps.getAccountById((long) secondAccountId);
+        Double senderBalanceBefore = senderAccountDaoBefore.getBalance();
+        Double receiverBalanceBefore = receiverAccountDaoBefore.getBalance();
 
         MakeTransactionRequest transactionRequest = MakeTransactionRequest.builder()
                 .senderAccountId(firstAccountId)
@@ -138,22 +139,15 @@ public class MakeTransactionTest extends BaseTest {
                 ResponseSpecs.requestReturnsOK())
                 .post(transactionRequest);
 
-        MakeDepositResponse senderAccountAfter = AccountHelper.getAccountById(firstAccountId, userRequest.getUsername(), userRequest.getPassword());
-        MakeDepositResponse receiverAccountAfter = AccountHelper.getAccountById(secondAccountId, userRequest.getUsername(), userRequest.getPassword());
-
-        MakeDepositResponse expectedSenderAccount = MakeDepositResponse.builder()
-                .id(firstAccountId)
-                .balance(senderAccountBefore.getBalance() - amount)
-                .build();
-
-        MakeDepositResponse expectedReceiverAccount = MakeDepositResponse.builder()
-                .id(secondAccountId)
-                .balance(receiverAccountBefore.getBalance() + amount)
-                .build();
-
-        ModelAssertions.assertThatModels(expectedSenderAccount, senderAccountAfter).match();
-        ModelAssertions.assertThatModels(expectedReceiverAccount, receiverAccountAfter).match();
+        // Проверяем, что балансы изменились в базе данных
+       AccountDao senderAccountDaoAfter = DataBaseSteps.getAccountById((long) firstAccountId);
+       AccountDao receiverAccountDaoAfter = DataBaseSteps.getAccountById((long) secondAccountId);
+       assertEquals(senderBalanceBefore - amount, senderAccountDaoAfter.getBalance(),
+               "Sender account balance should be decreased by transaction amount in database");
+       assertEquals(receiverBalanceBefore + amount, receiverAccountDaoAfter.getBalance(),
+               "Receiver account balance should be increased by transaction amount in database");
     }
+
 
     public static Stream<Arguments> validTransactionAmountSmall() {
         return Stream.of(
@@ -199,8 +193,11 @@ public class MakeTransactionTest extends BaseTest {
                 ResponseSpecs.requestReturnsOK())
                 .post(depositRequest);
 
-        MakeDepositResponse senderAccountBefore = AccountHelper.getAccountById(firstAccountId, userRequest.getUsername(), userRequest.getPassword());
-        MakeDepositResponse receiverAccountBefore = AccountHelper.getAccountById(secondAccountId, userRequest.getUsername(), userRequest.getPassword());
+        // Получаем балансы до попытки транзакции из БД
+      AccountDao senderAccountDaoBefore = DataBaseSteps.getAccountById((long) firstAccountId);
+      AccountDao receiverAccountDaoBefore = DataBaseSteps.getAccountById((long) secondAccountId);
+      Double senderBalanceBefore = senderAccountDaoBefore.getBalance();
+      Double receiverBalanceBefore = receiverAccountDaoBefore.getBalance();
 
         MakeTransactionRequest transactionRequest = MakeTransactionRequest.builder()
                 .senderAccountId(firstAccountId)
@@ -213,11 +210,13 @@ public class MakeTransactionTest extends BaseTest {
                 ResponseSpecs.requestReturnsBadRequestWithMessage(errorType))
                 .post(transactionRequest);
 
-        MakeDepositResponse senderAccountAfter = AccountHelper.getAccountById(firstAccountId, userRequest.getUsername(), userRequest.getPassword());
-        MakeDepositResponse receiverAccountAfter = AccountHelper.getAccountById(secondAccountId, userRequest.getUsername(), userRequest.getPassword());
-
-        ModelAssertions.assertThatModels(senderAccountBefore, senderAccountAfter).match();
-        ModelAssertions.assertThatModels(receiverAccountBefore, receiverAccountAfter).match();
+        // Проверяем, что балансы не изменились в базе данных
+       AccountDao senderAccountDaoAfter = DataBaseSteps.getAccountById((long) firstAccountId);
+       AccountDao receiverAccountDaoAfter = DataBaseSteps.getAccountById((long) secondAccountId);
+       assertEquals(senderBalanceBefore, senderAccountDaoAfter.getBalance(),
+               "Sender account balance should not be changed in database after invalid transaction attempt");
+       assertEquals(receiverBalanceBefore, receiverAccountDaoAfter.getBalance(),
+               "Receiver account balance should not be changed in database after invalid transaction attempt");
     }
 
     public static Stream<Arguments> invalidAmountTransfer() {
@@ -261,8 +260,11 @@ public class MakeTransactionTest extends BaseTest {
                 ResponseSpecs.requestReturnsOK())
                 .post(depositRequest);
 
-        MakeDepositResponse senderAccountBefore = AccountHelper.getAccountById(senderAccountId, senderUserRequest.getUsername(), senderUserRequest.getPassword());
-        MakeDepositResponse receiverAccountBefore = AccountHelper.getAccountById(receiverAccountId, receiverUserRequest.getUsername(), receiverUserRequest.getPassword());
+        // Получаем балансы до транзакции из БД
+        AccountDao senderAccountDaoBefore = DataBaseSteps.getAccountById((long) senderAccountId);
+        AccountDao receiverAccountDaoBefore = DataBaseSteps.getAccountById((long) receiverAccountId);
+        Double senderBalanceBefore = senderAccountDaoBefore.getBalance();
+        Double receiverBalanceBefore = receiverAccountDaoBefore.getBalance();
 
         MakeTransactionRequest transactionRequest = MakeTransactionRequest.builder()
                 .senderAccountId(senderAccountId)
@@ -276,21 +278,14 @@ public class MakeTransactionTest extends BaseTest {
                 ResponseSpecs.requestReturnsOK())
                 .post(transactionRequest);
 
-        MakeDepositResponse senderAccountAfter = AccountHelper.getAccountById(senderAccountId, senderUserRequest.getUsername(), senderUserRequest.getPassword());
-        MakeDepositResponse receiverAccountAfter = AccountHelper.getAccountById(receiverAccountId, receiverUserRequest.getUsername(), receiverUserRequest.getPassword());
-
-        MakeDepositResponse expectedSenderAccount = MakeDepositResponse.builder()
-                .id(senderAccountId)
-                .balance(senderAccountBefore.getBalance() - transferAmount)
-                .build();
-
-        MakeDepositResponse expectedReceiverAccount = MakeDepositResponse.builder()
-                .id(receiverAccountId)
-                .balance(receiverAccountBefore.getBalance() + transferAmount)
-                .build();
-
-        ModelAssertions.assertThatModels(expectedSenderAccount, senderAccountAfter).match();
-        ModelAssertions.assertThatModels(expectedReceiverAccount, receiverAccountAfter).match();
+        // Проверяем, что балансы изменились в базе данных
+        AccountDao senderAccountDaoAfter = DataBaseSteps.getAccountById((long) senderAccountId);
+        AccountDao receiverAccountDaoAfter = DataBaseSteps.getAccountById((long) receiverAccountId);
+        
+        assertEquals(senderBalanceBefore - transferAmount, senderAccountDaoAfter.getBalance(), 
+                "Sender account balance should be decreased by transaction amount in database");
+        assertEquals(receiverBalanceBefore + transferAmount, receiverAccountDaoAfter.getBalance(), 
+                "Receiver account balance should be increased by transaction amount in database");
     }
 
     @Test
@@ -326,8 +321,11 @@ public class MakeTransactionTest extends BaseTest {
                 ResponseSpecs.requestReturnsOK())
                 .post(depositRequest);
 
-        MakeDepositResponse senderAccountBefore = AccountHelper.getAccountById(firstAccountId, userRequest.getUsername(), userRequest.getPassword());
-        MakeDepositResponse receiverAccountBefore = AccountHelper.getAccountById(secondAccountId, userRequest.getUsername(), userRequest.getPassword());
+        // Получаем балансы до попытки транзакции из БД
+        AccountDao senderAccountDaoBefore = DataBaseSteps.getAccountById((long) firstAccountId);
+        AccountDao receiverAccountDaoBefore = DataBaseSteps.getAccountById((long) secondAccountId);
+        Double senderBalanceBefore = senderAccountDaoBefore.getBalance();
+        Double receiverBalanceBefore = receiverAccountDaoBefore.getBalance();
 
         MakeTransactionRequest transactionRequest = MakeTransactionRequest.builder()
                 .senderAccountId(firstAccountId)
@@ -340,10 +338,13 @@ public class MakeTransactionTest extends BaseTest {
                 ResponseSpecs.requestReturnsBadRequestWithMessage("Invalid transfer: insufficient funds or invalid accounts"))
                 .post(transactionRequest);
 
-        MakeDepositResponse senderAccountAfter = AccountHelper.getAccountById(firstAccountId, userRequest.getUsername(), userRequest.getPassword());
-        MakeDepositResponse receiverAccountAfter = AccountHelper.getAccountById(secondAccountId, userRequest.getUsername(), userRequest.getPassword());
-
-        ModelAssertions.assertThatModels(senderAccountBefore, senderAccountAfter).match();
-        ModelAssertions.assertThatModels(receiverAccountBefore, receiverAccountAfter).match();
+        // Проверяем, что балансы не изменились в базе данных
+        AccountDao senderAccountDaoAfter = DataBaseSteps.getAccountById((long) firstAccountId);
+        AccountDao receiverAccountDaoAfter = DataBaseSteps.getAccountById((long) secondAccountId);
+        
+        assertEquals(senderBalanceBefore, senderAccountDaoAfter.getBalance(), 
+                "Sender account balance should not be changed in database after insufficient funds transaction attempt");
+        assertEquals(receiverBalanceBefore, receiverAccountDaoAfter.getBalance(), 
+                "Receiver account balance should not be changed in database after insufficient funds transaction attempt");
     }
 }

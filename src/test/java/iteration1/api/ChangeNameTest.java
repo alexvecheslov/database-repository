@@ -2,11 +2,14 @@ package iteration1.api;
 
 import api.models.CreateUserRequest;
 import api.requests.steps.AdminSteps;
+import api.requests.steps.DataBaseSteps;
+import api.dao.UserDao;
+import api.dao.comparison.DaoAndModelAssertions;
 import api.specs.RequestSpecs;
 import api.specs.ResponseSpecs;
 import api.generators.RandomModelGenerator;
-import models.ChangeNameRequest;
-import models.ChangeNameResponse;
+import api.models.ChangeNameRequest;
+import api.models.ChangeNameResponse;
 import api.models.comparison.ModelAssertions;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -18,6 +21,8 @@ import api.requests.skelethon.requesters.ValidatedCrudRequester;
 
 import java.util.stream.Stream;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
+
 public class ChangeNameTest extends BaseTest {
 
     @Test
@@ -27,22 +32,17 @@ public class ChangeNameTest extends BaseTest {
         ChangeNameRequest changeNameRequest = RandomModelGenerator.generate(ChangeNameRequest.class);
 
         // Обновляем имя через PUT
-        new ValidatedCrudRequester<ChangeNameResponse>(
+        ChangeNameResponse changeNameResponse = new ValidatedCrudRequester<ChangeNameResponse>(
                 RequestSpecs.authAsUser(userRequest.getUsername(), userRequest.getPassword()),
                 Endpoint.PROFILE,
                 ResponseSpecs.requestReturnsOK())
                 .update(0, changeNameRequest);
 
-        // Получаем обновленный профиль через GET для проверки
-        ChangeNameResponse updatedProfile = new CrudRequester(
-                RequestSpecs.authAsUser(userRequest.getUsername(), userRequest.getPassword()),
-                Endpoint.PROFILE,
-                ResponseSpecs.requestReturnsOK())
-                .getAll(ChangeNameResponse.class)
-                .extract()
-                .as(ChangeNameResponse.class);
+        ModelAssertions.assertThatModels(changeNameRequest, changeNameResponse).match();
 
-        ModelAssertions.assertThatModels(changeNameRequest, updatedProfile).match();
+        // Проверяем, что имя изменилось в базе данных
+        UserDao userDao = DataBaseSteps.getUserByUsername(userRequest.getUsername());
+        DaoAndModelAssertions.assertThat(changeNameResponse, userDao).match();
     }
 
     @ParameterizedTest
@@ -50,13 +50,9 @@ public class ChangeNameTest extends BaseTest {
     public void userCanNotChangeToInvalidName(String invalidName, String errorType) {
         CreateUserRequest userRequest = AdminSteps.createUser();
 
-        ChangeNameResponse nameBeforeResponse = new CrudRequester(
-                RequestSpecs.authAsUser(userRequest.getUsername(), userRequest.getPassword()),
-                Endpoint.PROFILE,
-                ResponseSpecs.requestReturnsOK())
-                .getAll(ChangeNameResponse.class)
-                .extract()
-                .as(ChangeNameResponse.class);
+        // Получаем имя до попытки изменения из БД
+        UserDao userDaoBefore = DataBaseSteps.getUserByUsername(userRequest.getUsername());
+        String nameBefore = userDaoBefore.getName();
 
         ChangeNameRequest changeNameRequest = ChangeNameRequest.builder()
                 .name(invalidName)
@@ -67,15 +63,10 @@ public class ChangeNameTest extends BaseTest {
                 ResponseSpecs.requestReturnsBadRequestWithMessage(errorType))
                 .update(0, changeNameRequest);
 
-        ChangeNameResponse nameAfterResponse = new CrudRequester(
-                RequestSpecs.authAsUser(userRequest.getUsername(), userRequest.getPassword()),
-                Endpoint.PROFILE,
-                ResponseSpecs.requestReturnsOK())
-                .getAll(ChangeNameResponse.class)
-                .extract()
-                .as(ChangeNameResponse.class);
-
-        ModelAssertions.assertThatModels(nameBeforeResponse, nameAfterResponse).match();
+        // Проверяем, что имя не изменилось в базе данных
+       UserDao userDao = DataBaseSteps.getUserByUsername(userRequest.getUsername());
+       assertEquals(nameBefore, userDao.getName(),
+               "Name should not be changed in database after invalid update attempt");
     }
 
     public static Stream<Arguments> invalidName() {

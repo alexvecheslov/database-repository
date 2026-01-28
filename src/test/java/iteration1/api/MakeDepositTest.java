@@ -3,11 +3,12 @@ package iteration1.api;
 import api.models.CreateAccountResponse;
 import api.models.CreateUserRequest;
 import api.requests.steps.AdminSteps;
+import api.requests.steps.DataBaseSteps;
+import api.dao.AccountDao;
 import api.specs.RequestSpecs;
 import api.specs.ResponseSpecs;
-import api.helpers.AccountHelper;
-import models.MakeDepositRequest;
-import models.MakeDepositResponse;
+import api.models.MakeDepositRequest;
+import api.models.MakeDepositResponse;
 import api.models.comparison.ModelAssertions;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
@@ -17,6 +18,8 @@ import api.requests.skelethon.requesters.CrudRequester;
 import api.requests.skelethon.requesters.ValidatedCrudRequester;
 
 import java.util.stream.Stream;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class MakeDepositTest extends BaseTest {
 
@@ -45,6 +48,11 @@ public class MakeDepositTest extends BaseTest {
                 .post(depositRequest);
 
         ModelAssertions.assertThatModels(depositRequest, depositResponse).match();
+
+        // Проверяем, что баланс изменился в базе данных
+       AccountDao senderAccountDao = DataBaseSteps.getAccountById((long) accountId);
+       assertEquals(depositResponse.getBalance(), senderAccountDao.getBalance(),
+               "Account balance should match in database after deposit");
     }
 
     @ParameterizedTest
@@ -60,7 +68,9 @@ public class MakeDepositTest extends BaseTest {
 
         int accountId = (int) accountResponse.getId();
 
-        MakeDepositResponse accountBefore = AccountHelper.getAccountById(accountId, userRequest.getUsername(), userRequest.getPassword());
+        // Получаем баланс до попытки депозита из БД
+       AccountDao accountDaoBefore = DataBaseSteps.getAccountById((long) accountId);
+       Double senderBalanceBefore = accountDaoBefore.getBalance();
 
         MakeDepositRequest depositRequest = MakeDepositRequest.builder()
                 .id(accountId)
@@ -72,9 +82,10 @@ public class MakeDepositTest extends BaseTest {
                 ResponseSpecs.requestReturnsBadRequestWithMessage(errorValue))
                 .post(depositRequest);
 
-        MakeDepositResponse accountAfter = AccountHelper.getAccountById(accountId, userRequest.getUsername(), userRequest.getPassword());
-
-        ModelAssertions.assertThatModels(accountBefore, accountAfter).match();
+        // Проверяем, что баланс не изменился в базе данных
+       AccountDao accountDaoAfter = DataBaseSteps.getAccountById((long) accountId);
+       assertEquals(senderBalanceBefore, accountDaoAfter.getBalance(),
+        "Account balance should not be changed in database after invalid deposit attempt");
     }
 
     @ParameterizedTest
@@ -90,7 +101,9 @@ public class MakeDepositTest extends BaseTest {
 
         int accountId = (int) accountResponse.getId();
 
-        MakeDepositResponse accountBefore = AccountHelper.getAccountById(accountId, userRequest.getUsername(), userRequest.getPassword());
+        // Получаем баланс до попытки депозита из БД
+        AccountDao accountDaoBefore = DataBaseSteps.getAccountById((long) accountId);
+        Double balanceBefore = accountDaoBefore.getBalance();
 
         MakeDepositRequest depositRequest = MakeDepositRequest.builder()
                 .id(account)
@@ -102,9 +115,10 @@ public class MakeDepositTest extends BaseTest {
                 ResponseSpecs.requestReturnsForbidden())
                 .post(depositRequest);
 
-        MakeDepositResponse accountAfter = AccountHelper.getAccountById(accountId, userRequest.getUsername(), userRequest.getPassword());
-
-        ModelAssertions.assertThatModels(accountBefore, accountAfter).match();
+        // Проверяем, что баланс не изменился в базе данных
+        AccountDao accountDaoAfter = DataBaseSteps.getAccountById((long) accountId);
+        assertEquals(balanceBefore, accountDaoAfter.getBalance(), 
+                "Account balance should not be changed in database after deposit to invalid account");
     }
 
     public static Stream<Arguments> invalidDepositAccount() {

@@ -2,11 +2,10 @@ package api.helpers;
 
 import api.models.CreateAccountResponse;
 import api.requests.skelethon.requesters.CrudRequester;
-import api.requests.skelethon.requesters.ValidatedCrudRequester;
 import api.specs.RequestSpecs;
 import api.specs.ResponseSpecs;
-import models.ChangeNameResponse;
-import models.MakeDepositResponse;
+import api.models.ChangeNameResponse;
+import api.models.MakeDepositResponse;
 import api.requests.skelethon.Endpoint;
 
 import java.util.List;
@@ -52,12 +51,17 @@ public class AccountHelper {
                 .findFirst()
                 .orElseThrow(() -> new RuntimeException("Account not found: " + accountId));
 
+        List<String> transactions = account.getTransactions() != null ? 
+                account.getTransactions().stream()
+                        .map(Object::toString)
+                        .toList() : 
+                List.<String>of();
+        
         return CreateAccountResponse.builder()
                 .id(account.getId())
                 .accountNumber(account.getAccountNumber())
                 .balance(account.getBalance())
-                .transactions(account.getTransactions() != null ? 
-                        account.getTransactions() : List.<Object>of())
+                .transactions(transactions)
                 .build();
     }
 }
