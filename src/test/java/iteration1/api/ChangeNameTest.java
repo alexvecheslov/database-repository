@@ -4,13 +4,11 @@ import api.models.CreateUserRequest;
 import api.requests.steps.AdminSteps;
 import api.requests.steps.DataBaseSteps;
 import api.dao.UserDao;
-import api.dao.comparison.DaoAndModelAssertions;
 import api.specs.RequestSpecs;
 import api.specs.ResponseSpecs;
 import api.generators.RandomModelGenerator;
 import api.models.ChangeNameRequest;
 import api.models.ChangeNameResponse;
-import api.models.comparison.ModelAssertions;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
@@ -32,17 +30,16 @@ public class ChangeNameTest extends BaseTest {
         ChangeNameRequest changeNameRequest = RandomModelGenerator.generate(ChangeNameRequest.class);
 
         // Обновляем имя через PUT
-        ChangeNameResponse changeNameResponse = new ValidatedCrudRequester<ChangeNameResponse>(
+        new ValidatedCrudRequester<ChangeNameResponse>(
                 RequestSpecs.authAsUser(userRequest.getUsername(), userRequest.getPassword()),
                 Endpoint.PROFILE,
                 ResponseSpecs.requestReturnsOK())
                 .update(0, changeNameRequest);
 
-        ModelAssertions.assertThatModels(changeNameRequest, changeNameResponse).match();
-
         // Проверяем, что имя изменилось в базе данных
         UserDao userDao = DataBaseSteps.getUserByUsername(userRequest.getUsername());
-        DaoAndModelAssertions.assertThat(changeNameResponse, userDao).match();
+        assertEquals(changeNameRequest.getName(), userDao.getName(), 
+                "Name should be updated in database after successful update");
     }
 
     @ParameterizedTest

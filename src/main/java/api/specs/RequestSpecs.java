@@ -1,12 +1,13 @@
 package api.specs;
 
 import api.configs.Config;
+import api.configs.RestAssuredConfigHelper;
 import com.github.viclovsky.swagger.coverage.FileSystemOutputWriter;
 import com.github.viclovsky.swagger.coverage.SwaggerCoverageRestAssured;
-import io.qameta.allure.restassured.AllureRestAssured;
+import common.filters.SafeAllureRestAssured;
+import common.filters.SafeResponseLoggingFilter;
 import io.restassured.builder.RequestSpecBuilder;
 import io.restassured.filter.log.RequestLoggingFilter;
-import io.restassured.filter.log.ResponseLoggingFilter;
 import io.restassured.http.ContentType;
 import io.restassured.specification.RequestSpecification;
 import api.models.LoginUserRequest;
@@ -30,10 +31,12 @@ public class RequestSpecs {
                 .setContentType(ContentType.JSON)
                 .setAccept(ContentType.JSON)
                 .addFilters( List.of(new RequestLoggingFilter(),
-                        new ResponseLoggingFilter(), new SwaggerCoverageRestAssured(
-                                new FileSystemOutputWriter(Paths.get("target/" + OUTPUT_DIRECTORY))), new AllureRestAssured())
-                        )
-                .setBaseUri(Config.getProperty("apiBaseUrl"));
+                        new SafeResponseLoggingFilter(), 
+                        new SwaggerCoverageRestAssured(
+                                new FileSystemOutputWriter(Paths.get("target/" + OUTPUT_DIRECTORY))), 
+                        new SafeAllureRestAssured()))
+                .setBaseUri(Config.getProperty("apiBaseUrl"))
+                .setConfig(RestAssuredConfigHelper.getConfig());
     }
 
     public static RequestSpecification unauthSpec() {
@@ -41,8 +44,14 @@ public class RequestSpecs {
     }
 
     public static RequestSpecification adminSpec() {
+        String adminAuth = authHeaders.get("admin");
+        if (adminAuth == null) {
+            // Если значение отсутствует, инициализируем его заново
+            adminAuth = "Basic YWRtaW46YWRtaW4=";
+            authHeaders.put("admin", adminAuth);
+        }
         return defaultRequestBuilder()
-                .addHeader("Authorization", authHeaders.get("admin"))
+                .addHeader("Authorization", adminAuth)
                 .build();
     }
 

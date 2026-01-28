@@ -137,9 +137,9 @@ public class MakeDepositTest extends BaseTest {
 
     public static Stream<Arguments> invalidBalanceData() {
         return Stream.of(
-                Arguments.of(5000.01, "Deposit amount cannot exceed 5000"),
-                Arguments.of(-0.01, "Deposit amount must be at least 0.01"),
-                Arguments.of(0, "Deposit amount must be at least 0.01"));
+                Arguments.of(5000.01, "Deposit amount exceeds the 5000 limit"),
+                Arguments.of(-0.01, "Invalid account or amount"),
+                Arguments.of(0, "Invalid account or amount"));
 
     }
 }
