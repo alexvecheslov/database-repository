@@ -7,23 +7,23 @@ jobs: # аналог этапов
   run-tests:
     name: Set up services (review apps) and run tests
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pages: write
+      id-token: write
     steps: # шаги конкретной job
       - name: Checkout repository # копируем файлы репозитория внутрь CI агента
         uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          persist-credentials: true
 
       - name: Set up JDK
         uses: actions/setup-java@v4
         with:
           distribution: 'corretto'
           java-version: '21'
-
-      - name: Cache Maven repository
-        uses: actions/cache@v4
-        with:
-          path: ~/.m2/repository
-          key: ${{ runner.os }}-maven-${{ hashFiles('**/pom.xml') }}
-          restore-keys: |
-            ${{ runner.os }}-maven-
+          cache: 'maven'
 
       - name: Set up Docker Compose
         run: |
@@ -32,7 +32,7 @@ jobs: # аналог этапов
           cd ../..
 
       - name: Run tests
-        run: ./mvnw clean test -q
+        run: mvn clean test -q
         env:
           APIBASEURL: http://localhost:4111
           UIBASEURL: http://frontend
