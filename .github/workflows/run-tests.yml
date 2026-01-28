@@ -38,44 +38,70 @@ jobs: # аналог этапов
           UIBASEURL: http://frontend
           APIVERSION: /api/v1
 
-      - name: Install Swagger Coverage CLI
-        if: always()
-        run: |
-          if [ ! -d ".swagger-coverage-commandline" ]; then
-            wget https://github.com/viclovsky/swagger-coverage/releases/download/1.5.0/swagger-coverage-commandline-1.5.0.zip
-            unzip swagger-coverage-commandline-1.5.0.zip
-            rm swagger-coverage-commandline-1.5.0.zip
-            chmod +x .swagger-coverage-commandline/bin/swagger-coverage-commandline
-          fi
-
       - name: Run Swagger coverage
         if: always()
         run: |
           if [ -d "target/swagger-coverage-output" ] && [ "$(ls -A target/swagger-coverage-output)" ]; then
-            .swagger-coverage-commandline/bin/swagger-coverage-commandline -s http://localhost:4111/v3/api-docs -i target/swagger-coverage-output
+            # Скачиваем JAR из Maven Central
+            SWAGGER_COVERAGE_VERSION=1.4.1
+            SWAGGER_COVERAGE_JAR="swagger-coverage-commandline-${SWAGGER_COVERAGE_VERSION}.jar"
+            if [ ! -f "$SWAGGER_COVERAGE_JAR" ]; then
+              wget "https://repo1.maven.org/maven2/com/github/viclovsky/swagger-coverage-commandline/${SWAGGER_COVERAGE_VERSION}/${SWAGGER_COVERAGE_JAR}"
+            fi
+            # Запускаем Swagger Coverage
+            java -jar "$SWAGGER_COVERAGE_JAR" \
+              -s http://localhost:4111/v3/api-docs \
+              -i target/swagger-coverage-output
           else
             echo "No swagger coverage data found, skipping report generation"
           fi
+
+      - name: Install Allure CLI
+        if: always()
+        run: |
+          wget https://github.com/allure-framework/allure2/releases/download/2.24.0/allure-2.24.0.tgz
+          tar -zxvf allure-2.24.0.tgz
+          sudo mv allure-2.24.0 /opt/allure
+          sudo ln -s /opt/allure/bin/allure /usr/local/bin/allure
+          rm allure-2.24.0.tgz
 
       - name: Create allure-history directory
         if: always()
         run: mkdir -p allure-history
 
       - name: Load test report history
-        uses: actions/checkout@v4
         if: always()
-        with:
-          ref: gh-pages
-          path: gh-pages
-          fetch-depth: 0
+        continue-on-error: true
+        run: |
+          # Пытаемся загрузить историю из gh-pages, если ветка существует
+          if git ls-remote --heads origin gh-pages 2>/dev/null | grep -q gh-pages; then
+            echo "gh-pages branch exists, fetching history"
+            git fetch origin gh-pages 2>/dev/null || true
+            git checkout gh-pages 2>/dev/null || mkdir -p gh-pages
+          else
+            echo "gh-pages branch does not exist yet, will be created on first publish"
+            mkdir -p gh-pages
+          fi
 
       - name: Build test report
-        uses: simple-elf/allure-report-action@v1.7
         if: always()
-        with:
-          gh_pages: gh-pages
-          allure_results: target/allure-results
-          allure_history: allure-history
+        run: |
+          if [ -d "target/allure-results" ] && [ "$(ls -A target/allure-results)" ]; then
+            # Копируем историю из gh-pages если она существует
+            if [ -d "gh-pages" ] && [ "$(ls -A gh-pages)" ]; then
+              cp -r gh-pages/* allure-history/ || true
+            fi
+            
+            # Генерируем новый отчет
+            allure generate target/allure-results -o allure-history/${{ github.run_number }} --clean
+            
+            # Создаем index для истории
+            if [ ! -f "allure-history/index.html" ]; then
+              cp allure-history/${{ github.run_number }}/index.html allure-history/index.html || true
+            fi
+          else
+            echo "No allure results found, skipping report generation"
+          fi
 
       - name: Build Swagger coverage report
         if: always()
